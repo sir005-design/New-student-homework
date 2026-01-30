@@ -10,8 +10,8 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
-            height: 100vh; /* 確保全螢幕高度 */
-            overflow: hidden; /* 防止最外層捲軸 */
+            height: 100vh;
+            overflow: hidden;
         }
 
         /* 登入畫面專用樣式 */
@@ -28,6 +28,14 @@
             justify-content: center;
         }
 
+        /* ★★★ 修正點：強制讓隱藏樣式生效 ★★★ */
+        #login-screen.hidden {
+            display: none !important;
+        }
+        #app-container.hidden {
+            display: none !important;
+        }
+
         .main-container {
             max-width: 1400px;
             margin: 0 auto;
@@ -35,7 +43,7 @@
             display: flex;
             flex-direction: column;
             gap: 1rem;
-            height: 100%; /* 佔滿高度 */
+            height: 100%;
         }
 
         .card {
@@ -76,12 +84,12 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             border: 1px solid #e5e7eb;
             overflow: hidden; 
-            flex: 1; /* 讓表格區塊自動填滿剩餘空間 */
-            min-height: 0; /* 防止溢出 */
+            flex: 1;
+            min-height: 0;
         }
 
         .table-scroll-wrapper {
-            flex: 1; /* 讓內部捲軸區塊填滿父容器 */
+            flex: 1;
             overflow: auto; 
             position: relative;
         }
@@ -357,7 +365,7 @@
     // 設定區域 (請在此填入您的 Firebase 設定)
     // ==========================================
     const YOUR_FIREBASE_CONFIG = {
-          apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
+  apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
   authDomain: "homework-cd858.firebaseapp.com",
   projectId: "homework-cd858",
   storageBucket: "homework-cd858.firebasestorage.app",
@@ -494,9 +502,6 @@
         });
     }
 
-    // ... (中間的 renderClassList, updateTopScrollbar, renderStudentsTable 等函式保持不變，直接沿用上方最新邏輯) ...
-    // 為了節省篇幅，這部分直接使用前面已完成的邏輯，功能完全相同，只差在 initFirebase 的入口不同
-    
     function renderClassList(classes) {
         classListEl.innerHTML = '';
         if (classes.length === 0) {
