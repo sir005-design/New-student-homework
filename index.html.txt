@@ -1,0 +1,419 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Plus, Download, Trash2, User, BookOpen, MessageCircle, 
+  Headphones, Star, PenTool, CheckCircle, Users, Sparkles, 
+  RefreshCw, PlusCircle, X, HelpCircle, Calculator
+} from 'lucide-react';
+
+const App = () => {
+  const [students, setStudents] = useState([]);
+  const [newName, setNewName] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+
+  const apiKey = ""; // 執行環境會自動提供
+
+  const defaultMatrix = {
+    abilities: {
+      label: "英語能力指標",
+      icon: <BookOpen className="w-4 h-4" />,
+      options: ["字彙辨識能力優異", "英語聽力敏銳", "聽說讀寫具備一定水準", "口語表達及聽力很棒", "字彙辨識能力佳"]
+    },
+    attitude: {
+      label: "課堂表現與態度",
+      icon: <Star className="w-4 h-4" />,
+      options: ["上課認真積極發言", "積極完成教師指派任務", "認真教導其他同學", "持續穩定進步", "上課偶爾會分心"]
+    },
+    homework: {
+      label: "作業與書寫",
+      icon: <PenTool className="w-4 h-4" />,
+      options: ["作業書寫越來越工整", "作業內容紮實穩定", "作業需更積極完成", "英文書寫需多花點心"]
+    },
+    improvement: {
+      label: "溫馨建議",
+      icon: <HelpCircle className="w-4 h-4" />,
+      options: ["加強課外讀物閱讀", "更有信心大聲唸英文", "利用課餘時間加強", "上課時能更加專心"]
+    }
+  };
+
+  const fetchWithRetry = async (url, options, retries = 5, backoff = 1000) => {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error('API Error');
+      return await response.json();
+    } catch (err) {
+      if (retries <= 0) throw err;
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+  };
+
+  const generateAISentence = async (retry = false) => {
+    const student = students.find(s => s.id === selectedStudentId);
+    const traits = Object.values(student.selections || {}).flat().filter(v => v);
+    
+    if (!student || traits.length === 0) return;
+
+    setIsGenerating(true);
+    
+    const prompt = `你是國小英文老師。請將以下特質關鍵字：[${traits.join(', ')}]，組合成一句自然、溫暖且具備教育意義的期末評語。
+    要求：
+    1. 絕對不要在句子中包含學生的姓名。
+    2. 總字數必須在 35 個字以內。
+    3. 結尾必須有標點符號。
+    4. 模仿「...表現不錯，若能...一定會更棒！」的口吻。
+    5. 直接輸出評語文字。`;
+
+    try {
+      const result = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        }
+      );
+
+      let aiText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+      aiText = aiText.replace(new RegExp(student.name, 'g'), '');
+      
+      setStudents(prev => prev.map(s => 
+        s.id === selectedStudentId ? { ...s, comment: aiText.substring(0, 35) } : s
+      ));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const addStudents = () => {
+    if (!newName.trim()) return;
+    const names = newName.split(/[\n,，]/).map(n => n.trim()).filter(n => n !== '');
+    const newStudents = names.map((name, index) => ({
+      id: Date.now() + index + Math.random(), 
+      name: name,
+      comment: '',
+      routineGrade: 0,
+      examGrade: 0,
+      selections: {
+        abilities: [],
+        attitude: [],
+        homework: [],
+        improvement: [],
+        custom: []
+      },
+      customTraits: []
+    }));
+    setStudents(prev => [...prev, ...newStudents]);
+    setNewName('');
+    if (!selectedStudentId && newStudents.length > 0) setSelectedStudentId(newStudents[0].id);
+  };
+
+  const handleGradeChange = (field, value) => {
+    setStudents(prev => prev.map(s => 
+      s.id === selectedStudentId ? { ...s, [field]: parseFloat(value) || 0 } : s
+    ));
+  };
+
+  const handleToggleSelect = (category, text) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id !== selectedStudentId) return s;
+      
+      const categorySelections = s.selections[category] || [];
+      let newCategorySelections;
+      
+      if (categorySelections.includes(text)) {
+        newCategorySelections = categorySelections.filter(item => item !== text);
+      } else {
+        newCategorySelections = [...categorySelections, text];
+      }
+
+      const newSelections = { ...s.selections, [category]: newCategorySelections };
+      const allTraits = Object.values(newSelections).flat();
+      const combined = allTraits.join('，') + (allTraits.length > 0 ? "。" : "");
+      
+      return { ...s, selections: newSelections, comment: combined.substring(0, 35) };
+    }));
+  };
+
+  const addCustomTrait = () => {
+    if (!customInput.trim()) return;
+    setStudents(prev => prev.map(s => {
+      if (s.id !== selectedStudentId) return s;
+      return { ...s, customTraits: [...(s.customTraits || []), customInput.trim()] };
+    }));
+    setCustomInput('');
+  };
+
+  const deleteStudent = (id) => {
+    setStudents(students.filter(s => s.id !== id));
+    if (selectedStudentId === id) setSelectedStudentId(null);
+  };
+
+  const exportToExcel = () => {
+    if (students.length === 0) return;
+    
+    let csvContent = "\uFEFF姓名,平時成績,段考成績,個人平均(平時+段考),期末評語\n";
+    let totalExamGrade = 0;
+    
+    students.forEach(s => {
+      const individualAvg = ((s.routineGrade + s.examGrade) / 2).toFixed(1);
+      totalExamGrade += s.examGrade;
+      csvContent += `"${s.name}",${s.routineGrade},${s.examGrade},${individualAvg},"${s.comment}"\n`;
+    });
+    
+    // 計算全班段考平均
+    const classExamAvg = (totalExamGrade / students.length).toFixed(1);
+    csvContent += `\n"全班人數",${students.length},,,\n`;
+    csvContent += `"全班段考平均",,${classExamAvg},,\n`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "學生期末英語成績與評語表.csv";
+    link.click();
+  };
+
+  const currentStudent = students.find(s => s.id === selectedStudentId);
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
+      <div className="max-w-6xl mx-auto">
+        <header className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Users className="text-blue-600" /> 英文評語與成績管理助手
+              </h1>
+              <p className="text-slate-500 text-sm mt-1">
+                輸入個人成績與評語，匯出時自動計算「全班段考平均」
+              </p>
+            </div>
+            <button
+              onClick={exportToExcel}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md active:scale-95"
+            >
+              <Download size={18} /> 匯出 Excel (含統計)
+            </button>
+          </div>
+          <div className="flex flex-col md:flex-row gap-3">
+            <textarea
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="貼上學生姓名（換行分隔）..."
+              className="flex-1 px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-400 min-h-[60px] resize-y text-sm"
+            />
+            <button
+              onClick={addStudents}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
+            >
+              <Plus size={20} /> 新增名單
+            </button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* 左側清單 */}
+          <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm flex flex-col h-[750px] overflow-hidden">
+            <div className="p-4 border-b bg-slate-50 font-bold flex justify-between items-center text-slate-700">
+              <span>學生名單 ({students.length})</span>
+            </div>
+            <div className="overflow-y-auto flex-1 text-sm">
+              {students.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 italic">
+                  尚未加入學生資料
+                </div>
+              ) : (
+                students.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => setSelectedStudentId(s.id)}
+                    className={`p-4 border-b cursor-pointer flex justify-between items-center transition-all ${
+                      selectedStudentId === s.id ? 'bg-blue-50 border-r-4 border-r-blue-500' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-slate-800 truncate">{s.name}</p>
+                      <div className="flex gap-2 text-[10px] mt-1">
+                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">段考: {s.examGrade}</span>
+                        <span className="bg-blue-100 px-1.5 py-0.5 rounded text-blue-600 font-bold">均: {((s.routineGrade + s.examGrade)/2).toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); deleteStudent(s.id); }} className="text-slate-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 右側內容區 */}
+          <div className="lg:col-span-9 flex flex-col gap-6">
+            {currentStudent ? (
+              <>
+                {/* 成績輸入 */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b pb-5 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">
+                        {currentStudent.name.charAt(0)}
+                      </div>
+                      <h2 className="text-xl font-bold text-slate-800">{currentStudent.name}</h2>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Routine</label>
+                        <input 
+                          type="number" 
+                          value={currentStudent.routineGrade}
+                          onChange={(e) => handleGradeChange('routineGrade', e.target.value)}
+                          className="w-20 px-3 py-2 border rounded-xl text-center font-bold text-slate-700 focus:ring-2 focus:ring-blue-400 outline-none transition-all"
+                          placeholder="平時"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Exam</label>
+                        <input 
+                          type="number" 
+                          value={currentStudent.examGrade}
+                          onChange={(e) => handleGradeChange('examGrade', e.target.value)}
+                          className="w-20 px-3 py-2 border rounded-xl text-center font-bold text-blue-700 border-blue-100 focus:ring-2 focus:ring-blue-400 outline-none transition-all"
+                          placeholder="段考"
+                        />
+                      </div>
+                      <div className="ml-2 pl-4 border-l border-slate-200 flex flex-col items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase">Avg</span>
+                        <span className="text-2xl font-black text-blue-600 tabular-nums">
+                          {((currentStudent.routineGrade + currentStudent.examGrade) / 2).toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 能力勾選 */}
+                  <div className="space-y-6 overflow-y-auto max-h-[420px] pr-2 custom-scrollbar">
+                    {Object.entries(defaultMatrix).map(([key, cat]) => (
+                      <div key={key}>
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-500 mb-3">
+                          {cat.icon} {cat.label}
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {cat.options.map(opt => {
+                            const isSelected = currentStudent.selections[key]?.includes(opt);
+                            return (
+                              <button
+                                key={opt}
+                                onClick={() => handleToggleSelect(key, opt)}
+                                className={`p-3 text-xs rounded-xl border text-left transition-all relative font-medium ${
+                                  isSelected 
+                                  ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-[0.98]' 
+                                  : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                {opt}
+                                {isSelected && <CheckCircle size={12} className="absolute top-1 right-1" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="pt-4 border-t">
+                      <label className="flex items-center gap-2 text-sm font-bold text-slate-500 mb-3">
+                        <PlusCircle className="w-4 h-4 text-orange-500" /> 自定義觀察
+                      </label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={customInput}
+                          onChange={(e) => setCustomInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && addCustomTrait()}
+                          placeholder="自行輸入特點..."
+                          className="flex-1 text-sm border rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-orange-200 transition-all"
+                        />
+                        <button onClick={addCustomTrait} className="bg-orange-500 text-white px-4 py-2 rounded-xl hover:bg-orange-600 transition-colors shadow-sm">
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {currentStudent.customTraits?.map((trait, idx) => {
+                          const isSelected = currentStudent.selections.custom?.includes(trait);
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => handleToggleSelect('custom', trait)}
+                              className={`px-3 py-1.5 text-xs rounded-full border transition-all ${
+                                isSelected
+                                ? 'bg-orange-600 border-orange-600 text-white' 
+                                : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'
+                              }`}
+                            >
+                              {trait}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI 預覽 */}
+                <div className="bg-slate-900 rounded-2xl shadow-xl p-6 text-white sticky bottom-0">
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="text-yellow-400" size={20} />
+                      <span className="font-semibold text-sm">期末評語 (35字內，不含姓名)</span>
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <button 
+                        onClick={() => generateAISentence()}
+                        disabled={isGenerating || Object.values(currentStudent.selections).flat().length === 0}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"
+                      >
+                        {isGenerating ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                        AI 優化語句
+                      </button>
+                      {currentStudent.comment && (
+                        <button 
+                          onClick={() => generateAISentence(true)} 
+                          disabled={isGenerating} 
+                          className="bg-slate-800 hover:bg-slate-700 p-2.5 rounded-xl border border-slate-700 transition-colors active:rotate-180"
+                        >
+                          <RefreshCw size={18} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-white/5 p-6 rounded-xl border border-white/10 min-h-[100px] flex flex-col justify-center text-center">
+                    <p className="text-xl leading-relaxed font-medium text-blue-50">
+                      {isGenerating ? "正在為您修飾語句..." : (currentStudent.comment || "尚未選取特點")}
+                    </p>
+                    <div className="mt-3 flex justify-end">
+                      <span className={`text-[11px] px-2.5 py-1 rounded-full font-black tracking-tighter ${currentStudent.comment.length > 35 ? 'bg-red-500' : 'bg-white/20'}`}>
+                        {currentStudent.comment.length} / 35 文字
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm p-20 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 h-full">
+                <Calculator size={80} strokeWidth={1} className="mb-4 opacity-10" />
+                <p className="text-lg">請選擇學生以開始輸入成績與勾選評語</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
