@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加分與作業追蹤系統 (教師專用)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 1. 基礎設定 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            height: 100vh; /* 確保全螢幕高度 */
+            overflow: hidden; /* 防止最外層捲軸 */
+        }
+
+        /* 登入畫面專用樣式 */
+        #login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f3f4f6;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            height: 100%; /* 佔滿高度 */
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: transform 0.1s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        input, select, textarea {
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+        }
+        
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        
+        /* 2. 表格區塊核心樣式 */
+        .table-container-card {
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            overflow: hidden; 
+            flex: 1; /* 讓表格區塊自動填滿剩餘空間 */
+            min-height: 0; /* 防止溢出 */
+        }
+
+        .table-scroll-wrapper {
+            flex: 1; /* 讓內部捲軸區塊填滿父容器 */
+            overflow: auto; 
+            position: relative;
+        }
+
+        /* Sticky 樣式 */
+        .sticky-col {
+            position: sticky !important;
+            left: 0;
+            background-color: white; 
+            z-index: 40 !important; 
+            border-right: 1px solid #e5e7eb;
+        }
+
+        .sticky-header {
+            position: sticky !important;
+            top: 0;
+            z-index: 50 !important; 
+            background-color: #f9fafb; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .sticky-corner {
+            position: sticky !important;
+            left: 0;
+            top: 0;
+            z-index: 60 !important;
+            background-color: #f9fafb;
+            border-right: 1px solid #e5e7eb;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .task-header-name {
+            display: block;
+            max-width: 6rem; 
+            word-wrap: break-word;
+            white-space: normal;
+            cursor: pointer;
+        }
+        .task-header-name:hover {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+
+        .task-col-width {
+            width: 100px;
+            min-width: 100px;
+            max-width: 100px;
+        }
+
+        /* 捲軸樣式優化 */
+        .scrollbar-custom::-webkit-scrollbar {
+            height: 14px;
+            width: 14px;
+        }
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 7px;
+            border: 3px solid #f1f1f1;
+        }
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: #a0a0a0;
+        }
+
+        /* 上方同步捲軸容器 */
+        .top-scroll-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: #f8fafc;
+            flex-shrink: 0;
+            height: 16px;
+        }
+
+        /* 模態視窗 */
+        .modal { z-index: 70; }
+        .note-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            z-index: 80;
+            width: 90%;
+            max-width: 500px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 75;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 登入畫面 -->
+<div id="login-screen">
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-sm w-full border border-gray-200">
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">教師登入</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">電子郵件</label>
+                <input type="email" id="login-email" class="w-full" placeholder="teacher@example.com">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+                <input type="password" id="login-password" class="w-full" placeholder="••••••••">
+            </div>
+            <div id="login-error" class="text-red-500 text-sm hidden"></div>
+            <button id="login-btn" class="w-full btn bg-blue-600 text-white hover:bg-blue-700 py-2">登入系統</button>
+        </div>
+        <p class="mt-4 text-xs text-center text-gray-400">請確認已在 Firebase 後台啟用 Email 登入並建立帳號。</p>
+    </div>
+</div>
+
+<!-- 主程式畫面 (預設隱藏) -->
+<div id="app-container" class="main-container hidden">
+    
+    <!-- 1. 頂部標題與工具 -->
+    <div class="card flex flex-col md:flex-row justify-between items-center p-4 gap-4 shrink-0">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <span>🏫</span> 班級加分與作業追蹤系統
+            </h1>
+            <div class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                <span>目前使用者: <span id="current-user-email" class="font-semibold text-blue-600"></span></span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-2">
+             <button id="logout-btn" class="btn bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm">登出</button>
+             <div class="h-6 w-px bg-gray-300 mx-1"></div>
+             <button id="export-btn" class="btn bg-green-600 text-white hover:bg-green-700 shadow-sm flex items-center gap-2 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                匯出 Excel
+            </button>
+             <button id="show-pending-btn" class="btn bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 flex items-center gap-2 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                僅顯示待處理
+            </button>
+        </div>
+    </div>
+    
+    <!-- 2. 成績表主區塊 -->
+    <div class="table-container-card">
+        <div class="p-3 border-b bg-gray-50 flex justify-between items-center shrink-0">
+            <h2 id="class-name-header" class="text-xl font-bold text-gray-800">班級成績表</h2>
+            <div class="text-xs text-gray-500">提示：可使用上方橫向捲軸快速移動查看</div>
+        </div>
+
+        <!-- 上方同步捲軸 -->
+        <div id="top-scrollbar" class="top-scroll-wrapper scrollbar-custom hidden">
+            <div id="top-scrollbar-content" class="h-1"></div>
+        </div>
+
+        <!-- 表格捲動區域 -->
+        <div id="table-wrapper" class="table-scroll-wrapper scrollbar-custom">
+            <div id="table-container" class="min-w-max">
+                <div class="p-12 text-center text-gray-500 flex flex-col items-center">
+                    <svg class="h-12 w-12 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                    <p>請先從下方「班級列表」選擇班級，或新增資料</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 下方管理區塊 (Flex 排版) -->
+    <div class="flex flex-col lg:flex-row gap-4 shrink-0">
+        
+        <!-- 作業管理 -->
+        <div class="card p-4 bg-gray-50 border border-gray-200 flex-1">
+            <h3 class="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <span class="bg-purple-100 text-purple-600 p-1 rounded">📝</span> 作業欄位管理
+            </h3>
+            <div class="flex flex-col gap-3">
+                <div class="flex gap-2">
+                    <input type="text" id="task-name-input" class="w-full text-sm" placeholder="輸入作業名稱...">
+                    <button id="add-task-btn" class="btn bg-purple-600 text-white hover:bg-purple-700 text-xs whitespace-nowrap shadow-sm">新增</button>
+                </div>
+                <div class="flex gap-2 border-t border-gray-200 pt-3">
+                    <select id="task-select" class="w-full text-sm bg-white border border-gray-300 rounded shadow-sm focus:outline-none">
+                        <option value="">選擇要刪除的作業...</option>
+                    </select>
+                    <button id="delete-task-btn" class="btn bg-white text-red-600 hover:bg-red-50 border border-red-200 text-xs whitespace-nowrap shadow-sm">刪除</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 班級管理 -->
+        <div class="card p-4 border border-gray-200 flex-1">
+            <h3 class="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <span class="bg-blue-100 text-blue-600 p-1 rounded">📂</span> 班級列表
+            </h3>
+            <div class="flex gap-2 mb-3">
+                <input type="text" id="class-name-input" class="w-full text-sm" placeholder="新班級名稱...">
+                <button id="add-class-btn" class="btn bg-blue-600 text-white hover:bg-blue-700 text-xs whitespace-nowrap">新增</button>
+            </div>
+            <div class="max-h-32 overflow-y-auto border rounded bg-gray-50 p-2">
+                <ul id="class-list" class="space-y-1"></ul>
+            </div>
+        </div>
+        
+        <!-- 學生管理 -->
+        <div class="card p-4 border border-gray-200 flex-1">
+            <h3 class="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <span class="bg-green-100 text-green-600 p-1 rounded">👨‍🎓</span> 學生名單管理
+            </h3>
+            <div class="flex gap-2 mb-3">
+                <input type="text" id="student-name-input" class="w-full text-sm" placeholder="姓名...">
+                <button id="add-student-btn" class="btn bg-green-600 text-white hover:bg-green-700 text-xs whitespace-nowrap">新增</button>
+            </div>
+            <div class="flex gap-2">
+                <textarea id="student-list-input" rows="2" class="w-full text-sm resize-none" placeholder="批次匯入(逗號分隔)..."></textarea>
+                <button id="import-students-btn" class="btn bg-gray-600 text-white hover:bg-gray-700 text-xs whitespace-nowrap">匯入</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 彈出視窗 -->
+<div id="modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center hidden modal">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+        <h3 id="modal-title" class="text-xl font-bold mb-4 text-gray-800"></h3>
+        <p id="modal-message" class="mb-6 text-gray-600 leading-relaxed"></p>
+        <div class="flex justify-end gap-3">
+            <button id="modal-cancel-btn" class="btn bg-gray-200 text-gray-800 hover:bg-gray-300">取消</button>
+            <button id="modal-confirm-btn" class="btn bg-red-600 text-white hover:bg-red-700 shadow-md">確定</button>
+        </div>
+    </div>
+</div>
+
+<!-- 作業備註視窗 -->
+<div id="note-modal" class="hidden">
+    <div class="overlay" onclick="closeNoteModal()"></div>
+    <div class="note-modal flex flex-col h-[400px]"> 
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <h3 class="text-xl font-bold text-gray-800">📝 作業備註：<span id="note-modal-task-name" class="text-blue-600"></span></h3>
+            <button onclick="closeNoteModal()" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
+        </div>
+        <textarea id="note-modal-textarea" class="w-full flex-1 p-3 text-base border border-gray-300 rounded-md mb-4 focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="在此輸入作業備註 (例如：截止日期、評分標準)..."></textarea>
+        
+        <div class="flex justify-between items-center mt-auto pt-2 border-t border-gray-100">
+            <button onclick="markAllTaskCompleted()" class="btn bg-transparent text-green-600 hover:bg-green-50 border border-green-200 flex items-center gap-1 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                全班標示為完成
+            </button>
+            <div class="flex gap-2">
+                <button onclick="closeNoteModal()" class="btn bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">取消</button>
+                <button onclick="saveNoteAndClose()" class="btn bg-blue-600 text-white hover:bg-blue-700 shadow-sm">儲存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    setLogLevel('silent');
+
+    // ==========================================
+    // 設定區域 (請在此填入您的 Firebase 設定)
+    // ==========================================
+    const YOUR_FIREBASE_CONFIG = {
+          apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
+  authDomain: "homework-cd858.firebaseapp.com",
+  projectId: "homework-cd858",
+  storageBucket: "homework-cd858.firebasestorage.app",
+  messagingSenderId: "313614485885",
+  appId: "1:313614485885:web:2de4b06ddb5917bfc2a414",
+  measurementId: "G-CFZVHVMB5L"
+    };
+    // ==========================================
+
+    let db, auth, userId;
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : YOUR_FIREBASE_CONFIG;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    let currentClassId = '';
+    let previousClassId = '';
+    let classUnsubscribe = null;
+    let currentFilter = 'all'; 
+    let currentClassDataForExport = { name: '', students: [], tasks: [] };
+
+    // Login Elements
+    const loginScreen = document.getElementById('login-screen');
+    const appContainer = document.getElementById('app-container');
+    const loginBtn = document.getElementById('login-btn');
+    const loginEmailInput = document.getElementById('login-email');
+    const loginPasswordInput = document.getElementById('login-password');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('logout-btn');
+    const currentUserEmail = document.getElementById('current-user-email');
+
+    // Other UI Elements
+    const addClassBtn = document.getElementById('add-class-btn');
+    const classListEl = document.getElementById('class-list');
+    const classNameInput = document.getElementById('class-name-input');
+    const studentNameInput = document.getElementById('student-name-input');
+    const addStudentBtn = document.getElementById('add-student-btn');
+    const studentListInput = document.getElementById('student-list-input');
+    const importStudentsBtn = document.getElementById('import-students-btn');
+    const taskNameInput = document.getElementById('task-name-input');
+    const addTaskBtn = document.getElementById('add-task-btn');
+    const tableContainer = document.getElementById('table-container');
+    const tableWrapper = document.getElementById('table-wrapper'); 
+    const topScrollbar = document.getElementById('top-scrollbar'); 
+    const topScrollbarContent = document.getElementById('top-scrollbar-content'); 
+    const showPendingBtn = document.getElementById('show-pending-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const classNameHeader = document.getElementById('class-name-header');
+    const taskSelect = document.getElementById('task-select');
+    const deleteTaskBtn = document.getElementById('delete-task-btn');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const noteModal = document.getElementById('note-modal');
+    const noteModalTaskName = document.getElementById('note-modal-task-name');
+    const noteModalTextarea = document.getElementById('note-modal-textarea');
+
+    async function initFirebase() {
+        if (!firebaseConfig || (firebaseConfig.apiKey && firebaseConfig.apiKey.includes("請貼上"))) {
+            if(window.location.hostname !== 'localhost' && !window.location.hostname.includes('googleusercontent')) {
+               alert("尚未設定 Firebase Config，請編輯 index.html 填入金鑰。");
+            }
+            return;
+        }
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            // 監聽登入狀態
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // 已登入
+                    userId = user.uid;
+                    currentUserEmail.textContent = user.email;
+                    loginScreen.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+                    startDataListeners();
+                } else {
+                    // 未登入
+                    userId = null;
+                    loginScreen.classList.remove('hidden');
+                    appContainer.classList.add('hidden');
+                }
+            });
+        } catch (error) {
+            console.error("Firebase error:", error);
+            alert("Firebase 連線錯誤");
+        }
+    }
+
+    // 登入功能
+    async function handleLogin() {
+        const email = loginEmailInput.value;
+        const password = loginPasswordInput.value;
+        loginError.classList.add('hidden');
+        
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            loginError.textContent = "登入失敗：" + error.message;
+            loginError.classList.remove('hidden');
+        }
+    }
+
+    // 登出功能
+    async function handleLogout() {
+        try {
+            await signOut(auth);
+            window.location.reload(); // 重新整理確保清除狀態
+        } catch (error) {
+            console.error("Logout error", error);
+        }
+    }
+
+    function startDataListeners() {
+        if (!userId) return;
+        const classesRef = collection(db, `artifacts/${appId}/users/${userId}/classes`);
+        onSnapshot(classesRef, (snapshot) => {
+            const classes = [];
+            snapshot.forEach(doc => classes.push({ id: doc.id, ...doc.data() }));
+            renderClassList(classes);
+            if (classes.length > 0 && !currentClassId) currentClassId = classes[0].id;
+            
+            if (currentClassId !== previousClassId) {
+                previousClassId = currentClassId;
+                renderStudentsTable();
+            } else if (!classes.find(c => c.id === currentClassId)) {
+                currentClassId = '';
+                previousClassId = '';
+                renderStudentsTable();
+            }
+        });
+    }
+
+    // ... (中間的 renderClassList, updateTopScrollbar, renderStudentsTable 等函式保持不變，直接沿用上方最新邏輯) ...
+    // 為了節省篇幅，這部分直接使用前面已完成的邏輯，功能完全相同，只差在 initFirebase 的入口不同
+    
+    function renderClassList(classes) {
+        classListEl.innerHTML = '';
+        if (classes.length === 0) {
+            classListEl.innerHTML = '<li class="text-gray-400 text-xs text-center py-2">無班級</li>';
+            return;
+        }
+        classes.forEach(cls => {
+            const li = document.createElement('li');
+            const isActive = cls.id === currentClassId;
+            li.className = `flex items-center justify-between p-2 rounded text-sm cursor-pointer border ${isActive ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold' : 'bg-white border-gray-100 text-gray-600 hover:bg-gray-50'}`;
+            li.innerHTML = `<span class="truncate flex-1">${cls.name}</span>`;
+            li.addEventListener('click', () => {
+                if (currentClassId !== cls.id) {
+                    currentClassId = cls.id;
+                    renderClassList(classes);
+                    renderStudentsTable();
+                    previousClassId = currentClassId;
+                }
+            });
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '✕';
+            deleteBtn.className = 'text-gray-400 hover:text-red-500 ml-2 px-1';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showModal('刪除班級', `確定要刪除「${cls.name}」嗎？`, () => deleteClass(cls.id), null);
+            });
+            li.appendChild(deleteBtn);
+            classListEl.appendChild(li);
+        });
+    }
+
+    function updateTopScrollbar() {
+        const table = tableWrapper.querySelector('table');
+        if (table) {
+            if (table.offsetWidth > tableWrapper.clientWidth) {
+                topScrollbar.classList.remove('hidden');
+                topScrollbarContent.style.width = table.offsetWidth + 'px';
+                topScrollbar.onscroll = () => { tableWrapper.scrollLeft = topScrollbar.scrollLeft; };
+                tableWrapper.onscroll = () => { topScrollbar.scrollLeft = tableWrapper.scrollLeft; };
+            } else {
+                topScrollbar.classList.add('hidden');
+            }
+        } else {
+            topScrollbar.classList.add('hidden');
+        }
+    }
+
+    function isTaskPendingForStudent(student, task) {
+        const status = student.taskStatus?.[task] || { type: 'button', value: 0 };
+        if (status.type === 'button') return status.value === 0 || status.value === 1;
+        else if (status.type === 'grade') return Number(status.value) <= 60;
+        return true;
+    }
+
+    function renderStudentsTable() {
+        if (classUnsubscribe) { classUnsubscribe(); classUnsubscribe = null; }
+        if (!currentClassId) {
+            classNameHeader.textContent = `班級成績表`;
+            tableContainer.innerHTML = `<div class="p-8 text-center text-gray-400">請先選擇一個班級</div>`;
+            taskSelect.innerHTML = '<option value="">無資料</option>';
+            return;
+        }
+
+        const classDocRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        classUnsubscribe = onSnapshot(classDocRef, (docSnap) => {
+            if (!docSnap.exists()) return;
+            const classData = docSnap.data();
+            const students = classData.students || [];
+            const allTasks = classData.tasks || [];
+            const taskNotes = classData.taskNotes || {};
+            const className = classData.name || '未命名班級';
+            currentClassDataForExport = { name: className, students: students, tasks: allTasks };
+            classNameHeader.textContent = `${className} 成績表`;
+
+            const convertGradeToPoints = (grade) => {
+                grade = Number(grade);
+                if (grade >= 95) return 3;
+                if (grade >= 85) return 2;
+                if (grade >= 60) return 1;
+                return 0;
+            };
+
+            students.forEach(student => {
+                let taskScore = 0;
+                allTasks.forEach(task => {
+                    const status = student.taskStatus?.[task] || { type: 'button', value: 0 };
+                    if (status.type === 'button') taskScore += status.value === 2 ? 2 : (status.value === 1 ? 1 : 0);
+                    else if (status.type === 'grade') taskScore += convertGradeToPoints(status.value);
+                });
+                student.taskScore = taskScore;
+                student.totalScore = student.taskScore + ((student.manualScore || 0) * 0.5);
+            });
+
+            const maxScore = students.reduce((max, student) => Math.max(max, student.totalScore), 0);
+            students.forEach(student => {
+                student.finalGrade = maxScore > 0 ? 75 + ((student.totalScore / maxScore) * 17) : 75;
+                student.finalGrade = Math.min(92, Math.round(student.finalGrade));
+                student.points = Math.max(0, Math.min(12, Math.round((student.finalGrade - 75) * (12 / 17))));
+            });
+            currentClassDataForExport.students = students;
+
+            let tasksToRender = allTasks;
+            if (currentFilter === 'pending') {
+                tasksToRender = allTasks.filter(task => students.some(student => isTaskPendingForStudent(student, task)));
+            }
+            const filteredStudents = students.filter(student => currentFilter === 'pending' ? allTasks.some(task => isTaskPendingForStudent(student, task)) : true);
+
+            taskSelect.innerHTML = allTasks.length > 0 
+                ? '<option value="">選擇作業...</option>' + allTasks.map(task => `<option value="${task}">${task}</option>`).join('') 
+                : '<option value="">無作業</option>';
+            
+            showPendingBtn.className = currentFilter === 'pending' 
+                ? 'btn bg-blue-100 text-blue-700 border border-blue-300 text-sm flex items-center gap-2'
+                : 'btn bg-white text-gray-700 border border-gray-300 text-sm flex items-center gap-2';
+            showPendingBtn.innerHTML = currentFilter === 'pending' ? '顯示全部' : '僅顯示待處理';
+
+            if (allTasks.length === 0 && students.length === 0) {
+                 tableContainer.innerHTML = `<div class="p-10 text-center text-gray-400">此班級尚無資料</div>`;
+                return;
+            }
+
+            let tableHTML = `
+                <table class="min-w-full divide-y divide-gray-200 border-collapse">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase tracking-wider sticky-corner shadow-sm h-12" style="min-width:120px;">姓名</th>
+                            <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider bg-yellow-50 border-l border-yellow-100 sticky-header h-12" style="min-width:80px">教師加分</th>
+                            <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider sticky-header h-12">作業分數</th>
+                            <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider sticky-header h-12">原始總分</th>
+                            <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider bg-blue-50 border-l border-blue-100 sticky-header h-12">學期成績<br>(75-92)</th>
+                            <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider bg-orange-50 border-l border-orange-100 sticky-header h-12">獲得點數<br>(0-12)</th>
+            `;
+            
+            tasksToRender.forEach(task => {
+                const hasNote = taskNotes[task] && taskNotes[task].trim().length > 0;
+                tableHTML += `<th class="px-2 py-2 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider border-l border-gray-200 task-column-header group sticky-header task-col-width bg-gray-50 h-12">
+                                <div class="relative flex flex-col items-center justify-between h-full w-full">
+                                    <span class="task-header-name flex items-center justify-center gap-1 ${hasNote ? 'text-blue-600 font-bold' : ''}" onclick="openNoteModal('${task}')" title="${task}">
+                                        ${task} ${hasNote ? '📝' : ''}
+                                    </span>
+                                    <button class="text-xs text-gray-400 hover:text-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" onclick="toggleColumnInputMode('${task}')">切換模式</button>
+                                </div>
+                              </th>`;
+            });
+            
+            tableHTML += `<th class="px-4 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider border-l sticky-header h-12">操作</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+
+            filteredStudents.forEach((student, index) => {
+                const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                tableHTML += `
+                    <tr class="${rowClass} hover:bg-gray-100 transition-colors">
+                        <td class="px-4 py-1.5 whitespace-nowrap text-sm font-medium text-gray-900 sticky-col shadow-sm ${rowClass}" style="z-index:15;">
+                            <div class="flex items-center"><span class="text-gray-400 w-6 text-right mr-2 text-xs">${index + 1}.</span>${student.name}</div>
+                        </td>
+                        <td class="px-2 py-1.5 whitespace-nowrap bg-yellow-50/50 text-center">
+                            <input type="number" class="w-14 text-center border-gray-300 focus:ring-yellow-500 focus:border-yellow-500 rounded text-sm" value="${student.manualScore || 0}" onchange="updateManualScore('${student.id}', this.value)">
+                        </td>
+                        <td class="px-2 py-1.5 whitespace-nowrap text-center text-sm text-gray-500">${student.taskScore}</td>
+                        <td class="px-2 py-1.5 whitespace-nowrap text-center text-sm text-gray-500 font-mono">${student.totalScore}</td>
+                        <td class="px-2 py-1.5 whitespace-nowrap text-center text-base font-bold text-blue-600 bg-blue-50/50 border-l border-blue-100">${student.finalGrade}</td>
+                        <td class="px-2 py-1.5 whitespace-nowrap text-center text-base font-bold text-orange-500 bg-orange-50/50 border-l border-orange-100">${student.points}</td>
+                `;
+                tasksToRender.forEach(task => {
+                    const statusObj = student.taskStatus?.[task] || { type: 'button', value: 0 };
+                    let displayHTML = '';
+                    if (statusObj.type === 'button') {
+                        let btnClass = '', btnText = '';
+                        if (statusObj.value === 2) { btnClass = 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'; btnText = '完成'; } 
+                        else if (statusObj.value === 1) { btnClass = 'bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200'; btnText = '未訂'; } 
+                        else { btnClass = 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'; btnText = '未繳'; }
+                        displayHTML = `<button class="w-full px-2 py-1 text-xs font-medium rounded shadow-sm transition-all ${btnClass}" onclick="updateTaskStatus('${student.id}', '${task}', ${statusObj.value})">${btnText}</button>`;
+                    } else if (statusObj.type === 'grade') {
+                        const scoreVal = Number(statusObj.value);
+                        let inputClass = '';
+                        if (scoreVal >= 85) inputClass = 'bg-green-100 text-green-700 border-green-300';
+                        else if (scoreVal >= 60) inputClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
+                        else inputClass = 'bg-red-50 text-red-600 border-red-200';
+                        displayHTML = `<input type="number" class="w-full px-2 py-1 text-xs font-medium rounded shadow-sm transition-all text-center border ${inputClass} focus:ring-2 focus:ring-blue-500 outline-none" value="${statusObj.value}" onchange="updateTaskGrade('${student.id}', '${task}', this.value)">`;
+                    }
+                    tableHTML += `<td class="px-2 py-1.5 whitespace-nowrap text-center border-l border-gray-100 align-middle task-col-width">${displayHTML}</td>`;
+                });
+                tableHTML += `<td class="px-4 py-1.5 whitespace-nowrap text-center border-l border-gray-200"><button class="text-gray-400 hover:text-red-600 transition p-1" onclick="deleteStudent('${student.id}')">🗑️</button></td></tr>`;
+            });
+            tableHTML += `</tbody></table>`;
+            tableContainer.innerHTML = tableHTML;
+            updateTopScrollbar();
+        });
+    }
+
+    // Helper functions (same as before)
+    async function addClass() {
+        const className = classNameInput.value.trim();
+        if (className) {
+            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/classes`), { name: className, students: [], tasks: [], taskNotes: {} });
+            classNameInput.value = '';
+        }
+    }
+    async function deleteClass(classId) {
+        if (!classId) return;
+        await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/classes/${classId}`));
+        currentClassId = '';
+        renderStudentsTable();
+    }
+    async function addStudent() {
+        const studentName = studentNameInput.value.trim();
+        if (studentName && currentClassId) {
+            const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+            const classSnap = await getDoc(classRef);
+            if (classSnap.exists()) {
+                const updatedStudents = [...(classSnap.data().students || []), { id: crypto.randomUUID(), name: studentName, manualScore: 0, taskStatus: {} }];
+                await updateDoc(classRef, { students: updatedStudents });
+                studentNameInput.value = '';
+            }
+        }
+    }
+    async function importStudents() {
+        const names = studentListInput.value.trim().split(/[\n,]/).map(n => n.trim()).filter(n => n.length > 0);
+        if (names.length > 0 && currentClassId) {
+            const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+            const classSnap = await getDoc(classRef);
+            if (classSnap.exists()) {
+                const newStudents = names.map(name => ({ id: crypto.randomUUID(), name: name, manualScore: 0, taskStatus: {} }));
+                await updateDoc(classRef, { students: [...(classSnap.data().students || []), ...newStudents] });
+                studentListInput.value = '';
+                showModal("成功", `已匯入 ${names.length} 位學生`, null, null);
+            }
+        }
+    }
+    async function deleteStudent(studentId) {
+        if (!currentClassId) return;
+        showModal('刪除', '移除此學生？', async () => {
+            const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+            const data = (await getDoc(classRef)).data();
+            await updateDoc(classRef, { students: data.students.filter(s => s.id !== studentId) });
+        }, null);
+    }
+    async function addTask() {
+        const taskName = taskNameInput.value.trim();
+        if (taskName && currentClassId) {
+            const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+            const data = (await getDoc(classRef)).data();
+            if (!data.tasks.includes(taskName)) {
+                await updateDoc(classRef, { tasks: [...data.tasks, taskName], taskNotes: { ...data.taskNotes, [taskName]: "" } });
+                taskNameInput.value = '';
+            }
+        }
+    }
+    async function deleteTask() {
+        const taskName = taskSelect.value;
+        if (!currentClassId || !taskName) return;
+        showModal('刪除', `刪除「${taskName}」？`, async () => {
+            const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+            const data = (await getDoc(classRef)).data();
+            const updatedStudents = data.students.map(s => {
+                const newS = { ...s };
+                if (newS.taskStatus) { const ns = { ...newS.taskStatus }; delete ns[taskName]; newS.taskStatus = ns; }
+                return newS;
+            });
+            const notes = { ...data.taskNotes }; delete notes[taskName];
+            await updateDoc(classRef, { tasks: data.tasks.filter(t => t !== taskName), students: updatedStudents, taskNotes: notes });
+        }, null);
+    }
+    async function updateTaskStatus(studentId, taskName, current) {
+        if (!currentClassId) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const data = (await getDoc(classRef)).data();
+        const students = [...data.students];
+        const idx = students.findIndex(s => s.id === studentId);
+        if (idx !== -1) {
+            let next = 2;
+            if (current === 0) next = 2; else if (current === 2) next = 1; else if (current === 1) next = 0;
+            if (!students[idx].taskStatus) students[idx].taskStatus = {};
+            students[idx].taskStatus[taskName] = { type: 'button', value: next };
+            await updateDoc(classRef, { students });
+        }
+    }
+    async function updateTaskGrade(studentId, taskName, val) {
+        if (!currentClassId) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const students = (await getDoc(classRef)).data().students;
+        const idx = students.findIndex(s => s.id === studentId);
+        if (idx !== -1) {
+            if (!students[idx].taskStatus) students[idx].taskStatus = {};
+            students[idx].taskStatus[taskName] = { type: 'grade', value: Math.min(100, Math.max(0, Number(val))) };
+            await updateDoc(classRef, { students });
+        }
+    }
+    async function updateManualScore(studentId, val) {
+        if (!currentClassId) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const students = (await getDoc(classRef)).data().students;
+        const idx = students.findIndex(s => s.id === studentId);
+        if (idx !== -1) {
+            students[idx].manualScore = Number(val) || 0;
+            await updateDoc(classRef, { students });
+        }
+    }
+    async function toggleColumnInputMode(taskName) {
+        if (!currentClassId) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const students = (await getDoc(classRef)).data().students.map(s => {
+            const curr = s.taskStatus?.[taskName] || { type: 'button', value: 0 };
+            const next = curr.type === 'button' ? { type: 'grade', value: 0 } : { type: 'button', value: 0 };
+            return { ...s, taskStatus: { ...(s.taskStatus || {}), [taskName]: next } };
+        });
+        await updateDoc(classRef, { students });
+    }
+    async function saveTaskNote(taskName, content) {
+        if (!currentClassId) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const notes = { ...(await getDoc(classRef)).data().taskNotes, [taskName]: content };
+        await updateDoc(classRef, { taskNotes: notes });
+    }
+    async function markAllTaskCompleted() {
+        const taskName = noteModalTaskName.textContent;
+        if (!currentClassId || !taskName) return;
+        const classRef = doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`);
+        const classSnap = await getDoc(classRef);
+        if (classSnap.exists()) {
+            const students = classSnap.data().students.map(s => {
+                const newTaskStatus = { ...(s.taskStatus || {}) };
+                newTaskStatus[taskName] = { type: 'button', value: 2 };
+                return { ...s, taskStatus: newTaskStatus };
+            });
+            await updateDoc(classRef, { students });
+            closeNoteModal();
+        }
+    }
+    function exportToCSV() {
+        if (!currentClassDataForExport.students.length) { showModal('失敗', '無資料可匯出', null, null); return; }
+        const bom = "\uFEFF"; 
+        const headers = ['姓名', '教師加分', '作業分數', '原始總分', '學期成績', '獲得點數', ...currentClassDataForExport.tasks];
+        let csvContent = bom + headers.join(',') + '\n';
+        currentClassDataForExport.students.forEach(s => {
+            let row = [s.name, s.manualScore || 0, s.taskScore, s.totalScore, s.finalGrade, s.points];
+            currentClassDataForExport.tasks.forEach(task => {
+                const status = s.taskStatus?.[task] || { type: 'button', value: 0 };
+                row.push(status.type === 'button' ? (status.value === 2 ? '完成' : status.value === 1 ? '未訂' : '未繳') : status.value);
+            });
+            csvContent += row.join(',') + '\n';
+        });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+        link.download = `${currentClassDataForExport.name}_成績.csv`;
+        link.click();
+    }
+    function openNoteModal(taskName) {
+        noteModal.style.display = 'block';
+        noteModalTaskName.textContent = taskName;
+        noteModalTextarea.value = '載入中...';
+        getDoc(doc(db, `artifacts/${appId}/users/${userId}/classes/${currentClassId}`)).then(snap => {
+            if (snap.exists()) noteModalTextarea.value = (snap.data().taskNotes?.[taskName]) || '';
+        });
+    }
+    function closeNoteModal() { noteModal.style.display = 'none'; }
+    async function saveNoteAndClose() { await saveTaskNote(noteModalTaskName.textContent, noteModalTextarea.value); closeNoteModal(); }
+    function showModal(title, message, onConfirm, onCancel) {
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modalConfirmBtn.onclick = onConfirm ? () => { onConfirm(); closeModal(); } : null;
+        modalConfirmBtn.classList.toggle('hidden', !onConfirm);
+        modalCancelBtn.onclick = () => { if (onCancel) onCancel(); closeModal(); };
+        modal.classList.remove('hidden');
+    }
+    function closeModal() { modal.classList.add('hidden'); }
+    function handleFilterClick() { currentFilter = currentFilter === 'pending' ? 'all' : 'pending'; renderStudentsTable(); }
+
+    window.addEventListener('load', () => {
+        initFirebase();
+        loginBtn.addEventListener('click', handleLogin);
+        logoutBtn.addEventListener('click', handleLogout);
+        addClassBtn.addEventListener('click', addClass);
+        addStudentBtn.addEventListener('click', addStudent);
+        importStudentsBtn.addEventListener('click', importStudents);
+        addTaskBtn.addEventListener('click', addTask);
+        deleteTaskBtn.addEventListener('click', deleteTask);
+        showPendingBtn.addEventListener('click', handleFilterClick);
+        exportBtn.addEventListener('click', exportToCSV);
+        window.addEventListener('resize', updateTopScrollbar);
+        
+        window.updateTaskStatus = updateTaskStatus;
+        window.updateTaskGrade = updateTaskGrade;
+        window.updateManualScore = updateManualScore;
+        window.deleteStudent = deleteStudent;
+        window.toggleColumnInputMode = toggleColumnInputMode;
+        window.saveTaskNote = saveTaskNote;
+        window.openNoteModal = openNoteModal;
+        window.closeNoteModal = closeNoteModal;
+        window.saveNoteAndClose = saveNoteAndClose;
+        window.markAllTaskCompleted = markAllTaskCompleted; 
+    });
+</script>
+</body>
+</html>
