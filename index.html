@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>加分與作業追蹤系統 (診斷模式)</title>
+    <title>加分與作業追蹤系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 1. 基礎設定 */
@@ -397,6 +397,7 @@
     const logoutBtn = document.getElementById('logout-btn');
     const currentUserEmail = document.getElementById('current-user-email');
     const statusText = document.getElementById('status-text');
+    const loadingAuth = document.getElementById('loading-auth'); // Added reference
 
     // Other UI Elements
     const addClassBtn = document.getElementById('add-class-btn');
@@ -435,27 +436,26 @@
             // 監聽登入狀態
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // 已登入 - 嘗試切換畫面
-                    console.log("已登入，使用者:", user.email);
-                    if(statusText) statusText.textContent = "驗證成功，正在進入...";
-                    
+                    // 已登入
                     userId = user.uid;
                     if(currentUserEmail) currentUserEmail.textContent = user.email;
                     
-                    // 強制切換 class
+                    // 強制切換畫面
                     if(loginScreen) {
                         loginScreen.classList.add('hidden');
-                        loginScreen.style.display = 'none'; // 雙重保險
+                        loginScreen.style.display = 'none';
                     }
                     if(appContainer) {
                         appContainer.classList.remove('hidden');
-                        appContainer.style.display = 'flex'; // 雙重保險
+                        appContainer.style.display = 'flex';
                     }
+                    
+                    // ★★★ 關鍵修正：隱藏資料載入中提示 ★★★
+                    if(loadingAuth) loadingAuth.classList.add('hidden');
                     
                     startDataListeners();
                 } else {
                     // 未登入
-                    console.log("未登入狀態");
                     if(statusText) statusText.textContent = "請登入";
                     userId = null;
                     if(loginScreen) {
@@ -483,7 +483,6 @@
         
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            // 登入成功後 onAuthStateChanged 會自動觸發，不需要這裡做畫面切換
         } catch (error) {
             console.error("Login failed", error);
             if(statusText) statusText.textContent = "登入失敗";
