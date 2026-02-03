@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>加分與作業追蹤系統</title>
+    <title>加分與作業追蹤系統 (診斷模式)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 1. 基礎設定 */
@@ -15,7 +15,7 @@
             overflow-y: auto;
         }
 
-        /* ★★★ 登入畫面樣式與強制隱藏修正 ★★★ */
+        /* 登入畫面樣式 */
         #login-screen {
             position: fixed;
             top: 0;
@@ -23,13 +23,13 @@
             width: 100%;
             height: 100%;
             background-color: #f3f4f6;
-            z-index: 1000; /* 最高層級 */
+            z-index: 1000;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        /* 關鍵修正：使用 !important 強制覆蓋 ID 的 display 設定 */
+        /* 強制隱藏 */
         #login-screen.hidden {
             display: none !important;
             visibility: hidden !important;
@@ -78,7 +78,7 @@
             margin: 0; 
         }
         
-        /* 2. 成績表容器設定 */
+        /* 成績表容器 */
         .table-container-card {
             display: flex;
             flex-direction: column;
@@ -97,7 +97,7 @@
             position: relative;
         }
 
-        /* 3. Sticky 標題固定設定 */
+        /* Sticky 樣式 */
         .sticky-col {
             position: sticky !important;
             left: 0;
@@ -212,7 +212,7 @@
             <div id="login-error" class="text-red-500 text-sm hidden"></div>
             <button id="login-btn" class="w-full btn bg-blue-600 text-white hover:bg-blue-700 py-2">登入系統</button>
         </div>
-        <p class="mt-4 text-xs text-center text-gray-400">請確認已在 Firebase 後台啟用 Email 登入並建立帳號。</p>
+        <p class="mt-4 text-xs text-center text-gray-400">系統狀態：<span id="status-text">等待操作...</span></p>
     </div>
 </div>
 
@@ -367,23 +367,18 @@
 
     setLogLevel('silent');
 
-    // ==========================================
-    // 設定區域 (請在此填入您的 Firebase 設定)
-    // ==========================================
     const YOUR_FIREBASE_CONFIG = {
         apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
-  authDomain: "homework-cd858.firebaseapp.com",
-  projectId: "homework-cd858",
-  storageBucket: "homework-cd858.firebasestorage.app",
-  messagingSenderId: "313614485885",
-  appId: "1:313614485885:web:2de4b06ddb5917bfc2a414",
-  measurementId: "G-CFZVHVMB5L"
-
+        authDomain: "homework-cd858.firebaseapp.com",
+        projectId: "homework-cd858",
+        storageBucket: "homework-cd858.firebasestorage.app",
+        messagingSenderId: "313614485885",
+        appId: "1:313614485885:web:2de4b06ddb5917bfc2a414",
+        measurementId: "G-CFZVHVMB5L"
     };
-    // ==========================================
 
     let db, auth, userId;
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : YOUR_FIREBASE_CONFIG;
+    const firebaseConfig = YOUR_FIREBASE_CONFIG;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     let currentClassId = '';
@@ -401,6 +396,7 @@
     const loginError = document.getElementById('login-error');
     const logoutBtn = document.getElementById('logout-btn');
     const currentUserEmail = document.getElementById('current-user-email');
+    const statusText = document.getElementById('status-text');
 
     // Other UI Elements
     const addClassBtn = document.getElementById('add-class-btn');
@@ -431,13 +427,6 @@
     const noteModalTextarea = document.getElementById('note-modal-textarea');
 
     async function initFirebase() {
-        if (!firebaseConfig || (firebaseConfig.apiKey && firebaseConfig.apiKey.includes("請貼上"))) {
-            if(window.location.hostname !== 'localhost' && !window.location.hostname.includes('googleusercontent')) {
-               alert("尚未設定 Firebase Config，請編輯 index.html 填入金鑰。");
-            }
-            return;
-        }
-
         try {
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -446,22 +435,42 @@
             // 監聽登入狀態
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // 已登入
+                    // 已登入 - 嘗試切換畫面
+                    console.log("已登入，使用者:", user.email);
+                    if(statusText) statusText.textContent = "驗證成功，正在進入...";
+                    
                     userId = user.uid;
-                    currentUserEmail.textContent = user.email;
-                    loginScreen.classList.add('hidden');
-                    appContainer.classList.remove('hidden');
+                    if(currentUserEmail) currentUserEmail.textContent = user.email;
+                    
+                    // 強制切換 class
+                    if(loginScreen) {
+                        loginScreen.classList.add('hidden');
+                        loginScreen.style.display = 'none'; // 雙重保險
+                    }
+                    if(appContainer) {
+                        appContainer.classList.remove('hidden');
+                        appContainer.style.display = 'flex'; // 雙重保險
+                    }
+                    
                     startDataListeners();
                 } else {
                     // 未登入
+                    console.log("未登入狀態");
+                    if(statusText) statusText.textContent = "請登入";
                     userId = null;
-                    loginScreen.classList.remove('hidden');
-                    appContainer.classList.add('hidden');
+                    if(loginScreen) {
+                        loginScreen.classList.remove('hidden');
+                        loginScreen.style.display = 'flex';
+                    }
+                    if(appContainer) {
+                        appContainer.classList.add('hidden');
+                        appContainer.style.display = 'none';
+                    }
                 }
             });
         } catch (error) {
             console.error("Firebase error:", error);
-            alert("Firebase 連線錯誤");
+            alert("Firebase 連線錯誤: " + error.message);
         }
     }
 
@@ -470,10 +479,14 @@
         const email = loginEmailInput.value;
         const password = loginPasswordInput.value;
         loginError.classList.add('hidden');
+        if(statusText) statusText.textContent = "正在登入...";
         
         try {
             await signInWithEmailAndPassword(auth, email, password);
+            // 登入成功後 onAuthStateChanged 會自動觸發，不需要這裡做畫面切換
         } catch (error) {
+            console.error("Login failed", error);
+            if(statusText) statusText.textContent = "登入失敗";
             loginError.textContent = "登入失敗：" + error.message;
             loginError.classList.remove('hidden');
         }
@@ -483,7 +496,7 @@
     async function handleLogout() {
         try {
             await signOut(auth);
-            window.location.reload(); // 重新整理確保清除狀態
+            window.location.reload(); 
         } catch (error) {
             console.error("Logout error", error);
         }
