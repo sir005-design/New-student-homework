@@ -6,17 +6,42 @@
     <title>加分與作業追蹤系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 1. 基礎設定：允許網頁本身捲動 */
+        /* 1. 基礎設定 */
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
-            min-height: 100vh; /* 確保至少有螢幕高 */
-            padding-bottom: 3rem; /* 底部多留白，方便滑動 */
-            overflow-y: auto; /* 恢復垂直捲動 */
+            min-height: 100vh;
+            padding-bottom: 3rem;
+            overflow-y: auto;
+        }
+
+        /* ★★★ 登入畫面樣式與強制隱藏修正 ★★★ */
+        #login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f3f4f6;
+            z-index: 1000; /* 最高層級 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* 關鍵修正：使用 !important 強制覆蓋 ID 的 display 設定 */
+        #login-screen.hidden {
+            display: none !important;
+            visibility: hidden !important;
+            z-index: -1 !important;
+        }
+        
+        #app-container.hidden {
+            display: none !important;
         }
 
         .main-container {
-            max-width: 1600px; /* 加寬版面，讓成績表顯示更多 */
+            max-width: 1600px;
             margin: 0 auto;
             padding: 1rem;
             display: flex;
@@ -53,7 +78,7 @@
             margin: 0; 
         }
         
-        /* 2. 成績表容器設定 (關鍵修改) */
+        /* 2. 成績表容器設定 */
         .table-container-card {
             display: flex;
             flex-direction: column;
@@ -62,20 +87,17 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             border: 1px solid #e5e7eb;
             overflow: hidden; 
-            
-            /* ★★★ 設定固定高度：視窗高度 - 頂部保留空間 (約120px) ★★★ */
-            /* 這樣成績表會佔滿剩餘畫面，把管理區塊推到下面 */
             height: calc(100vh - 120px);
-            min-height: 500px; /* 最小保護高度 */
+            min-height: 500px;
         }
 
         .table-scroll-wrapper {
-            flex: 1; /* 填滿卡片剩下的空間 */
-            overflow: auto; /* 內部出現捲軸 */
+            flex: 1;
+            overflow: auto;
             position: relative;
         }
 
-        /* Sticky 樣式 (維持不變，確保標題固定) */
+        /* 3. Sticky 標題固定設定 */
         .sticky-col {
             position: sticky !important;
             left: 0;
@@ -120,7 +142,7 @@
             max-width: 100px;
         }
 
-        /* 捲軸樣式優化 */
+        /* 捲軸樣式 */
         .scrollbar-custom::-webkit-scrollbar {
             height: 14px; 
             width: 14px;
@@ -137,7 +159,6 @@
             background: #a0a0a0;
         }
 
-        /* 上方同步捲軸容器 */
         .top-scroll-wrapper {
             overflow-x: auto;
             overflow-y: hidden;
@@ -147,29 +168,8 @@
             height: 16px; 
         }
 
-        /* 下方管理區塊樣式 */
-        .management-area {
-            /* 這裡不需要特殊設定，自然流動即可 */
-        }
-
-        /* 登入畫面 */
-        #login-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #f3f4f6;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        #login-screen.hidden { display: none !important; }
-        #app-container.hidden { display: none !important; }
-
         /* 模態視窗 */
-        .modal { z-index: 70; }
+        .modal { z-index: 2000; }
         .note-modal {
             position: fixed;
             top: 50%;
@@ -179,7 +179,7 @@
             padding: 2rem;
             border-radius: 1rem;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            z-index: 80;
+            z-index: 2100;
             width: 90%;
             max-width: 500px;
         }
@@ -190,7 +190,7 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 75;
+            z-index: 2050;
         }
     </style>
 </head>
@@ -248,7 +248,7 @@
         </div>
     </div>
     
-    <!-- 2. 成績表主區塊 (紅色圈選處，最大化) -->
+    <!-- 2. 成績表主區塊 -->
     <div class="table-container-card">
         <div class="p-3 border-b bg-gray-50 flex justify-between items-center shrink-0">
             <h2 id="class-name-header" class="text-xl font-bold text-gray-800">班級成績表</h2>
@@ -271,7 +271,7 @@
         </div>
     </div>
 
-    <!-- 3. 下方管理區塊 (藍色圈選處，被推到最下面) -->
+    <!-- 3. 下方管理區塊 -->
     <div class="management-area flex flex-col lg:flex-row gap-4 shrink-0">
         
         <!-- 作業管理 -->
@@ -302,7 +302,7 @@
                 <input type="text" id="class-name-input" class="w-full text-sm" placeholder="新班級名稱...">
                 <button id="add-class-btn" class="btn bg-blue-600 text-white hover:bg-blue-700 text-xs whitespace-nowrap">新增</button>
             </div>
-            <div class="max-h-48 overflow-y-auto border rounded bg-gray-50 p-2"> <!-- 稍微放寬班級列表高度 -->
+            <div class="max-h-48 overflow-y-auto border rounded bg-gray-50 p-2"> 
                 <ul id="class-list" class="space-y-1"></ul>
             </div>
         </div>
@@ -371,13 +371,14 @@
     // 設定區域 (請在此填入您的 Firebase 設定)
     // ==========================================
     const YOUR_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
-    authDomain: "homework-cd858.firebaseapp.com",
-    projectId: "homework-cd858",
-    storageBucket: "homework-cd858.firebasestorage.app",
-    messagingSenderId: "313614485885",
-    appId: "1:313614485885:web:2de4b06ddb5917bfc2a414",
-    measurementId: "G-CFZVHVMB5L"
+        apiKey: "AIzaSyAdBjr2bfbpOMDddYmB6lD-Akvz4uxldgw",
+  authDomain: "homework-cd858.firebaseapp.com",
+  projectId: "homework-cd858",
+  storageBucket: "homework-cd858.firebasestorage.app",
+  messagingSenderId: "313614485885",
+  appId: "1:313614485885:web:2de4b06ddb5917bfc2a414",
+  measurementId: "G-CFZVHVMB5L"
+
     };
     // ==========================================
 
@@ -641,6 +642,7 @@
                             <th class="px-2 py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider bg-orange-50 border-l border-orange-100 sticky-header h-12">獲得點數<br>(0-12)</th>
             `;
             
+            // 重要：移除 th 的 relative，改用內層 div relative
             tasksToRender.forEach(task => {
                 const hasNote = taskNotes[task] && taskNotes[task].trim().length > 0;
                 tableHTML += `<th class="px-2 py-2 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider border-l border-gray-200 task-column-header group sticky-header task-col-width bg-gray-50 h-12">
